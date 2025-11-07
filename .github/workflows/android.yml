@@ -15,39 +15,44 @@ jobs:
       HTTP_PROXY: http://192.168.32.222:7897
       HTTPS_PROXY: http://192.168.32.222:7897
       PATH: /home/eric/android-sdk/cmdline-tools/latest/bin:$PATH
+      GRADLE_USER_HOME: /tmp/gradle-cache
 
     steps:
     - uses: actions/checkout@v3
 
     - name: Ensure SDK licenses accepted and build-tools installed
       run: |
-        # 自动安装缺失 build-tools 和 SDK platforms
         yes | sdkmanager --licenses
         sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
     - name: Build debug APK
-      env:
-        GRADLE_USER_HOME: /tmp/gradle-cache
       run: |
         ./gradlew app:assembleDebug
         mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
 
     - name: Build release APK (unsigned)
-      env:
-        GRADLE_USER_HOME: /tmp/gradle-cache
       run: |
         ./gradlew app:assembleRelease
         mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/ChromeXt_release_unsigned.apk
 
     - name: Sign release APK (optional)
-      if: ${{ secrets.SIGNING_KEY && secrets.ALIAS && secrets.KEY_STORE_PASSWORD && secrets.KEY_PASSWORD }}
-      uses: noriban/sign-android-release@master
-      with:
-        releaseDirectory: app/build/outputs/apk/release
-        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-        alias: ${{ secrets.ALIAS }}
-        keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-        keyPassword: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        if [ -n "${SIGNING_KEY}" ] && [ -n "${ALIAS}" ] && [ -n "${KEY_STORE_PASSWORD}" ] && [ -n "${KEY_PASSWORD}" ]; then
+          echo "Signing APK..."
+          npx noriban/sign-android-release@master \
+            --releaseDirectory app/build/outputs/apk/release \
+            --signingKeyBase64 "${SIGNING_KEY}" \
+            --alias "${ALIAS}" \
+            --keyStorePassword "${KEY_STORE_PASSWORD}" \
+            --keyPassword "${KEY_PASSWORD}"
+        else
+          echo "Signing skipped: secrets not configured."
+        fi
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        ALIAS: ${{ secrets.ALIAS }}
+        KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     - name: Upload debug APK
       uses: actions/upload-artifact@v4
@@ -55,8 +60,8 @@ jobs:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    - name: Upload release APK
+    - name: Upload release APK (unsigned)
       uses: actions/upload-artifact@v4
       with:
-        name: ChromeXt_release.apk
-        path: app/build/outputs/apk/release/ChromeXt.apk
+        name: ChromeXt_release_unsigned.apk
+        path: app/build/ChromeXt_release_unsigned.apk
