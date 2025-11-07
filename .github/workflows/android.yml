@@ -2,9 +2,9 @@ name: ChromeXt Android CI (Self-Hosted, System Gradle, Proxy-Friendly)
 
 on:
   push:
-    branches: ["master"]
+    branches: [ "master" ]
   pull_request:
-    branches: ["master"]
+    branches: [ "master" ]
   workflow_dispatch:
 
 jobs:
@@ -42,8 +42,8 @@ jobs:
     - name: Build debug APK
       run: gradle app:assembleDebug
 
-    # 6️⃣ 构建 release APK
-    - name: Build release APK
+    # 6️⃣ 构建 release APK (unsigned)
+    - name: Build release APK (unsigned)
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: gradle app:assembleRelease
 
@@ -53,44 +53,19 @@ jobs:
 
     - name: Rename release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
+      run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/ChromeXt_release_unsigned.apk
 
-    # 8️⃣ 签名 release APK
-    - name: Sign release APK
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: noriban/sign-android-release@master
-      id: sign_app
-      with:
-        releaseDirectory: app/build/outputs/apk/release
-        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-        alias: ${{ secrets.ALIAS }}
-        keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-        keyPassword: ${{ secrets.KEY_PASSWORD }}
-
-    # 9️⃣ 上传 debug APK artifact
+    # 8️⃣ 上传 debug APK artifact
     - name: Upload debug APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    # 🔟 上传签名 release APK
-    - name: Upload signed release APK
+    # 9️⃣ 上传 release APK artifact (unsigned)
+    - name: Upload release APK artifact (unsigned)
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ChromeXt_signed.apk
-        path: ${{ steps.sign_app.outputs.signedReleaseFile }}
-
-    # 1️⃣1️⃣ 可选：创建 GitHub Release
-    - name: Create GitHub Release
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.sha }}
-        name: ChromeXt Release ${{ github.sha }}
-        files: |
-          app/build/ChromeXt_debug.apk
-          ${{ steps.sign_app.outputs.signedReleaseFile }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: ChromeXt_release_unsigned.apk
+        path: app/build/ChromeXt_release_unsigned.apk
