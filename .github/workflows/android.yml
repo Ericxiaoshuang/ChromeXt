@@ -11,58 +11,64 @@ jobs:
   build:
     runs-on: self-hosted
 
-    env:
-      ANDROID_HOME: /home/eric/android-sdk
-      PATH: /home/eric/android-sdk/cmdline-tools/latest/bin:/home/eric/android-sdk/platform-tools:$PATH
-      HTTP_PROXY: http://192.168.32.222:7897
-      HTTPS_PROXY: http://192.168.32.222:7897
-
     steps:
     # 0️⃣ Checkout 源码
     - uses: actions/checkout@v3
 
-    # 1️⃣ 检查 JDK
+    # 1️⃣ 设置全局代理（可选，确保依赖下载走代理）
+    - name: Set system proxy
+      run: |
+        echo "http_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
+        echo "https_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
+        export http_proxy=http://192.168.32.222:7897
+        export https_proxy=http://192.168.32.222:7897
+
+    # 2️⃣ 设置 Android SDK 环境变量
+    - name: Set Android SDK environment
+      run: |
+        echo "ANDROID_HOME=/home/eric/android-sdk" >> $GITHUB_ENV
+        export ANDROID_HOME=/home/eric/android-sdk
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+
+    # 3️⃣ 检查 JDK
     - name: Check JDK
       run: java -version
 
-    # 2️⃣ 检查 Gradle
+    # 4️⃣ 检查 Gradle
     - name: Check Gradle
       run: gradle -v
 
-    # 3️⃣ 构建 debug APK
+    # 5️⃣ 构建 debug APK
     - name: Build debug APK
       run: gradle app:assembleDebug
 
-    # 4️⃣ 构建 release APK
+    # 6️⃣ 构建 release APK
     - name: Build release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: gradle app:assembleRelease
 
-    # 5️⃣ 重命名 APK
+    # 7️⃣ 重命名 APK
     - name: Rename debug APK
       run: mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
 
-    - name: Rename release APK (unsigned)
+    - name: Rename release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
 
-    # 6️⃣ 签名 release APK（可选，若 secrets 配置）
+    # 8️⃣ 签名 release APK（安全处理 secrets）
     - name: Sign release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: |
         if [ -n "${SIGNING_KEY}" ] && [ -n "${ALIAS}" ] && [ -n "${KEY_STORE_PASSWORD}" ] && [ -n "${KEY_PASSWORD}" ]; then
-          echo "Signing release APK..."
-          SIGNED_FILE=$(npx noriban/sign-android-release@master \
+          echo "Signing APK..."
+          npx noriban/sign-android-release@master \
             --releaseDirectory app/build/outputs/apk/release \
             --signingKeyBase64 "${SIGNING_KEY}" \
             --alias "${ALIAS}" \
             --keyStorePassword "${KEY_STORE_PASSWORD}" \
-            --keyPassword "${KEY_PASSWORD}" \
-            --outputFileName ChromeXt_signed.apk)
-          echo "SIGNED_RELEASE=$SIGNED_FILE" >> $GITHUB_ENV
+            --keyPassword "${KEY_PASSWORD}"
         else
           echo "Signing skipped: secrets not configured."
-          echo "SIGNED_RELEASE=app/build/outputs/apk/release/ChromeXt.apk" >> $GITHUB_ENV
         fi
       env:
         SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
@@ -70,22 +76,25 @@ jobs:
         KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-    # 7️⃣ 上传 debug APK artifact
+    # 9️⃣ 上传 debug APK artifact
     - name: Upload debug APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    # 8️⃣ 上传 release APK artifact（签名或未签名）
-    - name: Upload release APK
+    # 🔟 上传签名 release APK artifact
+    - name: Upload signed release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: ChromeXt_release.apk
-        path: ${{ env.SIGNED_RELEASE }}
+      run: |
+        if [ -f "app/build/outputs/apk/release/ChromeXt.apk" ]; then
+          echo "Uploading signed release APK..."
+          echo "::set-output name=signedReleaseFile::app/build/outputs/apk/release/ChromeXt.apk"
+        else
+          echo "Signed APK not found, skipping upload."
+        fi
 
-    # 9️⃣ 可选：创建 GitHub Release
+    # 1️⃣1️⃣ 可选：创建 GitHub Release
     - name: Create GitHub Release
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: softprops/action-gh-release@v1
@@ -94,6 +103,114 @@ jobs:
         name: ChromeXt Release ${{ github.sha }}
         files: |
           app/build/ChromeXt_debug.apk
-          ${{ env.SIGNED_RELEASE }}
+          app/build/outputs/apk/release/ChromeXt.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+name: ChromeXt Android CI (Self-Hosted, System Gradle, Proxy-Friendly)
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+    # 0️⃣ Checkout 源码
+    - uses: actions/checkout@v3
+
+    # 1️⃣ 设置全局代理（可选，确保依赖下载走代理）
+    - name: Set system proxy
+      run: |
+        echo "http_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
+        echo "https_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
+        export http_proxy=http://192.168.32.222:7897
+        export https_proxy=http://192.168.32.222:7897
+
+    # 2️⃣ 设置 Android SDK 环境变量
+    - name: Set Android SDK environment
+      run: |
+        echo "ANDROID_HOME=/home/eric/android-sdk" >> $GITHUB_ENV
+        export ANDROID_HOME=/home/eric/android-sdk
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+
+    # 3️⃣ 检查 JDK
+    - name: Check JDK
+      run: java -version
+
+    # 4️⃣ 检查 Gradle
+    - name: Check Gradle
+      run: gradle -v
+
+    # 5️⃣ 构建 debug APK
+    - name: Build debug APK
+      run: gradle app:assembleDebug
+
+    # 6️⃣ 构建 release APK
+    - name: Build release APK
+      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+      run: gradle app:assembleRelease
+
+    # 7️⃣ 重命名 APK
+    - name: Rename debug APK
+      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
+
+    - name: Rename release APK
+      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+      run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
+
+    # 8️⃣ 签名 release APK（安全处理 secrets）
+    - name: Sign release APK
+      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+      run: |
+        if [ -n "${SIGNING_KEY}" ] && [ -n "${ALIAS}" ] && [ -n "${KEY_STORE_PASSWORD}" ] && [ -n "${KEY_PASSWORD}" ]; then
+          echo "Signing APK..."
+          npx noriban/sign-android-release@master \
+            --releaseDirectory app/build/outputs/apk/release \
+            --signingKeyBase64 "${SIGNING_KEY}" \
+            --alias "${ALIAS}" \
+            --keyStorePassword "${KEY_STORE_PASSWORD}" \
+            --keyPassword "${KEY_PASSWORD}"
+        else
+          echo "Signing skipped: secrets not configured."
+        fi
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        ALIAS: ${{ secrets.ALIAS }}
+        KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+    # 9️⃣ 上传 debug APK artifact
+    - name: Upload debug APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ChromeXt_debug.apk
+        path: app/build/ChromeXt_debug.apk
+
+    # 🔟 上传签名 release APK artifact
+    - name: Upload signed release APK
+      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+      run: |
+        if [ -f "app/build/outputs/apk/release/ChromeXt.apk" ]; then
+          echo "Uploading signed release APK..."
+          echo "::set-output name=signedReleaseFile::app/build/outputs/apk/release/ChromeXt.apk"
+        else
+          echo "Signed APK not found, skipping upload."
+        fi
+
+    # 1️⃣1️⃣ 可选：创建 GitHub Release
+    - name: Create GitHub Release
+      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.sha }}
+        name: ChromeXt Release ${{ github.sha }}
+        files: |
+          app/build/ChromeXt_debug.apk
+          app/build/outputs/apk/release/ChromeXt.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
