@@ -1,4 +1,4 @@
-name: ChromeXt Android CI (Self-Hosted, China-Friendly)
+name: ChromeXt Android CI (Self-Hosted, System Gradle, China-Friendly)
 
 on:
   push:
@@ -12,7 +12,10 @@ jobs:
     runs-on: self-hosted
 
     steps:
-    # 0️⃣ 系统代理设置（Clash 代理）
+    # 0️⃣ Checkout 源码
+    - uses: actions/checkout@v3
+
+    # 1️⃣ 设置系统代理（可选，如果需要下载依赖）
     - name: Set system proxy
       run: |
         echo "http_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
@@ -20,27 +23,22 @@ jobs:
         export http_proxy=http://192.168.32.222:7897
         export https_proxy=http://192.168.32.222:7897
 
-    # 1️⃣ 设置 Gradle 代理
-    - name: Set Gradle proxy
-      run: |
-        echo "org.gradle.jvmargs=-Dhttp.proxyHost=192.168.32.222 -Dhttp.proxyPort=7897 -Dhttps.proxyHost=192.168.32.222 -Dhttps.proxyPort=7897" >> gradle.properties
-        export GRADLE_OPTS="-Dhttp.proxyHost=192.168.32.222 -Dhttp.proxyPort=7897 -Dhttps.proxyHost=192.168.32.222 -Dhttps.proxyPort=7897"
-
-    # 2️⃣ 获取源码
-    - uses: actions/checkout@v3
-
-    # 3️⃣ 确认 JDK 已安装
-    - name: Use system JDK
+    # 2️⃣ 确认系统 JDK 已安装
+    - name: Check JDK
       run: java -version
+
+    # 3️⃣ 确认系统 Gradle 已安装
+    - name: Check Gradle
+      run: gradle -v
 
     # 4️⃣ 构建 debug APK
     - name: Build debug APK
-      run: ./gradlew app:assembleDebug
+      run: gradle app:assembleDebug
 
     # 5️⃣ 构建 release APK
     - name: Build release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      run: ./gradlew app:assembleRelease
+      run: gradle app:assembleRelease
 
     # 6️⃣ 重命名 APK
     - name: Rename debug APK
@@ -62,14 +60,14 @@ jobs:
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-    # 8️⃣ 上传 debug APK
+    # 8️⃣ 上传 debug APK artifact
     - name: Upload debug APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    # 9️⃣ 上传签名 release APK
+    # 9️⃣ 上传签名 release APK artifact
     - name: Upload signed release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: actions/upload-artifact@v4
