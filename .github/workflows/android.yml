@@ -11,7 +11,6 @@ on:
 
 jobs:
   build:
-    # 使用你的自托管 runner
     runs-on: self-hosted
 
     steps:
@@ -42,7 +41,7 @@ jobs:
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
 
-    # 6️⃣ 签名 release APK（可选，如果你有 secrets）
+    # 6️⃣ 签名 release APK（可选）
     - name: Sign release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: noriban/sign-android-release@master
@@ -56,7 +55,7 @@ jobs:
 
     # 7️⃣ 上传 debug APK
     - name: Upload debug APK artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
@@ -64,12 +63,12 @@ jobs:
     # 8️⃣ 上传签名 release APK
     - name: Upload signed release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_signed.apk
         path: ${{ steps.sign_app.outputs.signedReleaseFile }}
 
-    # 9️⃣ 可选：自动创建 GitHub Release 并上传 APK
+    # 9️⃣ 自动创建 GitHub Release
     - name: Create GitHub Release
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: softprops/action-gh-release@v1
@@ -82,7 +81,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 10️⃣ 可选：保存在 runner 本地目录
+    # 10️⃣ 可选：保存 APK 到 runner 本地目录
     - name: Copy APK to local folder
       run: |
         mkdir -p ~/ChromeXt_builds
