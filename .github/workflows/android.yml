@@ -5,46 +5,38 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-  workflow_dispatch:  # 支持手动触发
-  schedule:
-    - cron: "0 0 * * *"  # 每天凌晨 0 点自动构建
 
 jobs:
   build:
-    runs-on: self-hosted
+
+    runs-on: ubuntu-latest
 
     steps:
-    # 1️⃣ 获取源码
-    - uses: actions/checkout@v3
-
-    # 2️⃣ 安装 JDK 21
-    - name: Set up JDK 21
-      uses: actions/setup-java@v3
+    - uses: actions/checkout@main
+    - name: set up JDK 21
+      uses: actions/setup-java@main
       with:
         java-version: '21'
         distribution: 'temurin'
 
-    # 3️⃣ 构建 debug APK
-    - name: Build debug APK
+    - name: Build debug
       run: ./gradlew app:assembleDebug
-
-    # 4️⃣ 构建 release APK（非 PR 且 master 或 tag）
-    - name: Build release APK
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+        
+    - name: Build release
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
       run: ./gradlew app:assembleRelease
 
-    # 5️⃣ 重命名 APK
     - name: Rename debug build
       run: mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
 
-    - name: Rename release APK
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
+    - name: Rename signed apk
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
       run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
 
-    # 6️⃣ 签名 release APK（可选）
-    - name: Sign release APK
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: noriban/sign-android-release@master
+
+    - uses: noriban/sign-android-release@master
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
+      name: Sign app APK
       id: sign_app
       with:
         releaseDirectory: app/build/outputs/apk/release
@@ -53,37 +45,26 @@ jobs:
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-    # 7️⃣ 上传 debug APK
-    - name: Upload debug APK artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload debug build
+      uses: actions/upload-artifact@main
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    # 8️⃣ 上传签名 release APK
-    - name: Upload signed release APK
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: actions/upload-artifact@v4
+    - name: Upload signed APK
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
+      uses: actions/upload-artifact@main
       with:
         name: ChromeXt_signed.apk
-        path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+        path: ${{steps.sign_app.outputs.signedReleaseFile}}
 
-    # 9️⃣ 自动创建 GitHub Release
-    - name: Create GitHub Release
-      if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
-      uses: softprops/action-gh-release@v1
+    - name: Collect debug build
+      uses: actions/download-artifact@main
       with:
-        tag_name: ${{ github.sha }}
-        name: ChromeXt Release ${{ github.sha }}
-        files: |
-          app/build/ChromeXt_debug.apk
-          ${{ steps.sign_app.outputs.signedReleaseFile }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: ChromeXt_debug.apk
 
-    # 10️⃣ 可选：保存 APK 到 runner 本地目录
-    - name: Copy APK to local folder
-      run: |
-        mkdir -p ~/ChromeXt_builds
-        cp app/build/ChromeXt_debug.apk ~/ChromeXt_builds/
-        cp ${{ steps.sign_app.outputs.signedReleaseFile }} ~/ChromeXt_builds/
+    - name: Collect signed APK
+      if: ${{ ( github.event_name != 'pull_request' && github.ref == 'refs/heads/master' ) || github.ref_type == 'tag' }}
+      uses: actions/download-artifact@main
+      with:
+        name: ChromeXt_signed.apk
