@@ -12,34 +12,51 @@ jobs:
 
     env:
       ANDROID_HOME: /home/eric/android-sdk
-      HTTP_PROXY: http://127.0.0.1:7890
-      HTTPS_PROXY: http://127.0.0.1:7890
+      HTTP_PROXY: http://192.168.32.222:7897
+      HTTPS_PROXY: http://192.168.32.222:7897
+      PATH: /home/eric/android-sdk/cmdline-tools/latest/bin:$PATH
 
     steps:
     - uses: actions/checkout@v3
 
+    - name: Ensure SDK licenses accepted and build-tools installed
+      run: |
+        # 自动安装缺失 build-tools 和 SDK platforms
+        yes | sdkmanager --licenses
+        sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
     - name: Build debug APK
       env:
-        GRADLE_USER_HOME: ${{ runner.temp }}/gradle
+        GRADLE_USER_HOME: /tmp/gradle-cache
       run: |
         ./gradlew app:assembleDebug
         mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
 
     - name: Build release APK (unsigned)
       env:
-        GRADLE_USER_HOME: ${{ runner.temp }}/gradle
+        GRADLE_USER_HOME: /tmp/gradle-cache
       run: |
         ./gradlew app:assembleRelease
         mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/ChromeXt_release_unsigned.apk
 
+    - name: Sign release APK (optional)
+      if: ${{ secrets.SIGNING_KEY && secrets.ALIAS && secrets.KEY_STORE_PASSWORD && secrets.KEY_PASSWORD }}
+      uses: noriban/sign-android-release@master
+      with:
+        releaseDirectory: app/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ secrets.ALIAS }}
+        keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+        keyPassword: ${{ secrets.KEY_PASSWORD }}
+
     - name: Upload debug APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    - name: Upload release APK (unsigned)
-      uses: actions/upload-artifact@v3
+    - name: Upload release APK
+      uses: actions/upload-artifact@v4
       with:
-        name: ChromeXt_release_unsigned.apk
-        path: app/build/ChromeXt_release_unsigned.apk
+        name: ChromeXt_release.apk
+        path: app/build/outputs/apk/release/ChromeXt.apk
