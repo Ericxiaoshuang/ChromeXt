@@ -1,4 +1,4 @@
-name: ChromeXt Android CI (Self-Hosted, System Gradle, China-Friendly)
+name: ChromeXt Android CI (Self-Hosted, System Gradle, Proxy-Friendly)
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     # 0️⃣ Checkout 源码
     - uses: actions/checkout@v3
 
-    # 1️⃣ 设置系统代理（可选，如果需要下载依赖）
+    # 1️⃣ 设置全局代理（可选，确保依赖下载走代理）
     - name: Set system proxy
       run: |
         echo "http_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
@@ -23,24 +23,31 @@ jobs:
         export http_proxy=http://192.168.32.222:7897
         export https_proxy=http://192.168.32.222:7897
 
-    # 2️⃣ 确认系统 JDK 已安装
+    # 2️⃣ 设置 Android SDK 环境变量
+    - name: Set Android SDK environment
+      run: |
+        echo "ANDROID_HOME=/home/eric/android-sdk" >> $GITHUB_ENV
+        export ANDROID_HOME=/home/eric/android-sdk
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+
+    # 3️⃣ 检查 JDK
     - name: Check JDK
       run: java -version
 
-    # 3️⃣ 确认系统 Gradle 已安装
+    # 4️⃣ 检查 Gradle
     - name: Check Gradle
       run: gradle -v
 
-    # 4️⃣ 构建 debug APK
+    # 5️⃣ 构建 debug APK
     - name: Build debug APK
       run: gradle app:assembleDebug
 
-    # 5️⃣ 构建 release APK
+    # 6️⃣ 构建 release APK
     - name: Build release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: gradle app:assembleRelease
 
-    # 6️⃣ 重命名 APK
+    # 7️⃣ 重命名 APK
     - name: Rename debug APK
       run: mv app/build/outputs/apk/debug/app-debug.apk app/build/ChromeXt_debug.apk
 
@@ -48,7 +55,7 @@ jobs:
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
 
-    # 7️⃣ 签名 release APK
+    # 8️⃣ 签名 release APK
     - name: Sign release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: noriban/sign-android-release@master
@@ -60,14 +67,14 @@ jobs:
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-    # 8️⃣ 上传 debug APK artifact
+    # 9️⃣ 上传 debug APK artifact
     - name: Upload debug APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: ChromeXt_debug.apk
         path: app/build/ChromeXt_debug.apk
 
-    # 9️⃣ 上传签名 release APK artifact
+    # 🔟 上传签名 release APK artifact
     - name: Upload signed release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: actions/upload-artifact@v4
@@ -75,7 +82,7 @@ jobs:
         name: ChromeXt_signed.apk
         path: ${{ steps.sign_app.outputs.signedReleaseFile }}
 
-    # 🔟 可选：创建 GitHub Release
+    # 1️⃣1️⃣ 可选：创建 GitHub Release
     - name: Create GitHub Release
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: softprops/action-gh-release@v1
