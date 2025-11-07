@@ -14,10 +14,18 @@ jobs:
     runs-on: self-hosted
 
     steps:
+    # 0️⃣ 设置 HTTP/HTTPS 代理，确保下载动作和依赖不会超时
+    - name: Set proxy for runner
+      run: |
+        echo "http_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
+        echo "https_proxy=http://192.168.32.222:7897" >> $GITHUB_ENV
+        export http_proxy=http://192.168.32.222:7897
+        export https_proxy=http://192.168.32.222:7897
+
     # 1️⃣ 获取源码
     - uses: actions/checkout@v3
 
-    # 2️⃣ 使用系统 JDK（已在 runner 预装）
+    # 2️⃣ 使用系统 JDK（确保 runner 已安装 JDK 21）
     - name: Use system JDK
       run: java -version
 
@@ -38,7 +46,7 @@ jobs:
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       run: mv app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/ChromeXt.apk
 
-    # 6️⃣ 签名 release APK（可选）
+    # 6️⃣ 签名 release APK（可选，需要 secrets）
     - name: Sign release APK
       if: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/master') || github.ref_type == 'tag' }}
       uses: noriban/sign-android-release@master
