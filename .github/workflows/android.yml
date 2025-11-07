@@ -1,10 +1,10 @@
 name: Android CI (Self-Hosted, System Gradle, Proxy-Friendly)
 
 on:
-  push:
-    branches: ["master"]
-  pull_request:
-    branches: ["master"]
+  push:        # 任何分支 push 都触发
+    branches: ["*"]
+  pull_request:  # 任何分支 PR 都触发
+    branches: ["*"]
 
 jobs:
   build:
@@ -12,7 +12,6 @@ jobs:
 
     env:
       ANDROID_HOME: /home/eric/android-sdk
-      # 这里可以根据需要配置代理
       HTTP_PROXY: http://127.0.0.1:7890
       HTTPS_PROXY: http://127.0.0.1:7890
       GRADLE_USER_HOME: ${{ runner.temp }}/gradle
